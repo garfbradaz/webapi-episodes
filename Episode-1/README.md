@@ -7,7 +7,7 @@ excerpt_separator: <!--more-->
 ---
 ## Previously on Decoding
 
-In [Episode 1]({{ site.baseurl }}{% post_url 2018-12-18-Episode-1-json-api-dotnet-core-docker %}) I set the scene for what this series will contain. Today's episode is simply on setting your *directory* structure and creating the relevant projects.
+In [Episode 1](https://garfbradaz.github.io/blog/2018/12/18/Episode-1-json-api-dotnet-core-docker.html) I set the scene for what this series will contain. Today's episode is simply on setting your *directory* structure and creating the relevant projects.
 
 ## Directory Structure
 
@@ -30,9 +30,7 @@ This command will create a dotnet project based off a default project template. 
 dotnet new --help
 ```
 
-This will give you a list of available templates you can use:
-
-![templates](/assets/posts/img/ep2-dotnet-new.png)
+This will give you a list of available templates you can use.
 
 Take note of the *short name* as this is what we will be using next. So now we know what `dotnet new` does, lets create the project:
 

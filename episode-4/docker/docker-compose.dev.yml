@@ -8,6 +8,8 @@ services:
         buildconfig: Debug
       context: ../src/api
       dockerfile: Dockerfile
+    volumes:
+      - ../src/api:/app
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:5003

@@ -2,104 +2,45 @@
 layout: post
 author: gareth
 category: blog
-tags: [how-to,dotnet-core,beginners,api]
+tags: [how-to,dotnet-core,beginners,api,docker-compose,mongodb]
 excerpt_separator: <!--more-->
 series: ASP.NET Core Web API Episodes
+comments: true
+title: Episode 4 - JSON API using ASP.NET Core, Docker & MongoDB -  Docker Part II Docker Compose
 ---
+# Previously on Dcoding
 
-## Previously on Decoding
+In [Episode 3]({{ site.baseurl }}{% post_url 2018-12-29-Episode-3-JSON-API-ASP.NET-Core-Docker--Setting-Up-Docker--DockerFiles %}) I set up our Dockerfiles for creating our *Docker Images* for our BookStore app. This will allow us to rapidly test our application as we move forward in later Episodes. Today's episode is **Docker Part 2: Docking Compose**. <!--more-->
 
-In [Episode 2]({{ site.baseurl }}{% post_url 2018-12-19-Episode-2-JSON-API-Dotnet-Core-Docker---Project-Structure %}) I set up the project directory structure. Today's episode is **Docker Part 1: DockerFiles**. <!--more-->
+## What is Docker Compose?
 
-## Lets talk about Docker
+The [official documentation](https://docs.docker.com/compose/) a good explanation:
 
-Firstly before we get into how to set up Docker, I want to get into bigging the big D up! Apart from *Visual Studio Code* and *WSL*, no other technology has transformed how I develop code in 2018. Yes there are pain points, but once you get through those, then your development experience starts (i dare say it) become a little more blissful. 
+> Compose is a tool for defining and running multi-container Docker applications.
 
-I can now pull down pre-developed images of applications, databases, load balancers, webs servers, SDKs build tools, pixie dust (nic: testing you are still reading!), and use them like lego bricks, to build a system, *without* installing the binaries on my machine.
+Docker compose allows you to define your *services* you need to build and run a full scale application. Think about it, not just your application you need. Depending on the type of application you may need:
 
-Take this tutorial for example, apart from the .NET SDK installed for the IDE, *MongoDB*, *nginx* and the *dotnet runtime* are all installed via images, for which I can build and throw away when finished. No installation needed on my local development (host) machine. Even SQL Server runs on Linux now, and has a Image to pull down.
+- Database of some sort.
 
-This Lego Brick approach to building software now means I dont need to worry about installing all the tools on my machine, configure those tools and un-install when finished. I can package it all up in a *Dockerfile* to use now, later or even on another machine, without polluting my host machine and slowing it down.
+- Load Balancer.
 
-### What is Docker?
+- Web Server.
 
-Docker is product that utilises a technology *containers*, which have been around in Linux for a while. Containers are isolated/sandboxed processes, which only use the bare minimum binaries needed to run the application *within* the container, including the file system. Unlike *Virtual Machine* which run a whole operating system, and the bloat around it.
+- Other applications / APIs.
 
-Now as I was writing this post, [Dave Swersky](https://twitter.com/dswersky), wrote an awesome post on [What is Docker, and why is it so popular?](https://dev.to/raygun/what-is-docker-and-why-is-it-so-popular-45c7). Check that out.
+You may even want to run your unit/integration testing during your Continuous Integration pipeline (CI). If each of the applications you need as part of the full application.
 
-## Dockerfile
+## BookStore.WebApi Set up
 
-If this is the first time you have used Docker, or you do not have it installed, check out dockers [getting started](https://www.docker.com/get-started) to start your journey. You will need to sign up to Docker Hub(https://hub.docker.com/) as well. Think as hub as the repository for Container Images you can access. Not just Dockers, but the communities as a whole. You may here the term *Container Registry* for the Hub as well (You can set up your own private Registries on Azure for example).
+If we take a look at our application for the *BookStore.WebApi*, we can see the following:
 
-So a couple of commands and terminology we need to clear up, which are useful now before moving forward.
+![architecture diagram](/assets/img/posts/docker-arch.png)
 
-### Help
+As you can see from my quickly drawn up diagram (used [Microsoft Whiteboard](https://www.microsoft.com/en-gb/p/microsoft-whiteboard/9mspc6mp8fm4?activetab=pivot:overviewtab)), we have two *services* running in containers, 1 for the application and the other for the database (*MongoDB*), so we can compose these together using `docker-compose`.
 
-So the `docker` command has a nice help facility, so if you want to see a list of docker commands:
+## docker-compose.dev.yml
 
-```bash
-docker --help
-```
-
-### Images
-
-A image is the package that includes everything needed to run your application, from the environment, code and configuration. You normally use other companies/communities/developers pre-built images from the hub or *base images*, but you can [create your own](https://docs.docker.com/develop/develop-images/baseimages/) just as easily.
-
-If you want to see which images you have on your host machine (your development PC/Mac), then run the following command:
-
-```bash
-docker images ls
-```
-
-If this is all new, then nothing will be listed currently, but when we start building our *Dockerfile*, we will come back to the output on what this means.
-
-### Containers
-
-The container is your image *running* in a discrete process. You can have multiple containers running on your host machine. Again there is a command to see what containers are running:
-
-```bash
-docker container ls
-```
-
-You can also use the short cut (One I personally use a lot):
-
-```bash
-docker ps
-```
-
-## Develop first Dockerfile
-
-What is a Dockerfile then? Here is a good description from Docker [themselves](https://docs.docker.com/engine/reference/builder/#usage):
-
-> Docker can build images automatically by reading the instructions from a Dockerfile. A Dockerfile is a text
-> document that contains all the commands a user could call on the command line to assemble an image. Using docker
-> build users can create an automated build that executes several command-line instructions in succession.
-
-To begin with, we will build our first Dockerfile to:
-
-- Compile our .NET Core Web API for the BookStore.
-- Run our .NET Core Web API.
-
-We call *Dockerfiles* that do more than one thing, *multi-stage* builds. They allow us to *build* and *run* without maintaining separate Dockerfiles (which was the case once upon a time). Because I don't learn this stuff on my own, let me link to [Alex Ellis](https://blog.alexellis.io/mutli-stage-docker-builds/) talking more about this.
-
-**Future Post:** While I'm chatting about Alex, in the future I will be refactoring this **BookStore.App** to use [OpenFaaS](https://www.openfaas.com/) an open source serverless architecture that *isn't* coupled to one particular cloud. I'm excited about this, as I have wanted to use this tech for a while now, I even have the Raspberry Pis to cluster.....
-
-So, back to the matter at hand. Firstly we need to *change directory* to `src/api` directory we set up in [Episode 2]({{ site.baseurl }}{% post_url 2018-12-19-Episode-2-JSON-API-Dotnet-Core-Docker---Project-Structure %}). Just to recap we set up the following:
-
-```
-    .
-    ├── src
-    |   ├── api
-    |       |
-    |       ├── BookStore.WebApi.csproj
-    ├── tests
-    |   ├── integration
-    |   ├── unit
-    |       ├── BookStore.Tests.csproj
-    ├── docker
-```
-
-Then create a file called `Dockerfile` in the root of `api`:
+So in  [Episode 2]({{ site.baseurl }}{% post_url 2018-12-19-Episode-2-JSON-API-Dotnet-Core-Docker---Project-Structure %}) we set up the Project Structure, so change directory to the `./docker` directory.
 
 ```
     .
@@ -115,105 +56,157 @@ Then create a file called `Dockerfile` in the root of `api`:
     ├── docker
 ```
 
-Add the following to the file:
+Within that directory, you should have two empty YAML files:
 
-```dockerfile
+- **docker-compose.dev.yml**
+- **docker-compose.yml**
+
+We are concentrating on a *Development* environment first, so add the following to `docker-compose.dev.yml`:
+
+```yaml
+version: "3"
+services:
+  webapi:
+    image: garfbradaz/bookstoreapi:develop
+    container_name: webapi_tutorial_debug
+    build:
+      args:
+        buildconfig: Debug
+      context: ../src/api
+      dockerfile: Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5003
+    ports:
+      - "5003:5003"
+    depends_on:
+      - mongodb
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+```
+
+And also, just add the following line to `docker-compose.yml` file so that when we run `docker-compose up` it doesn't fail:
+
+```yaml
+version: "3"
+```
+
+As in **Episode 3** lets break this *YAML* file down now and what we are declaring. These files are *YAML* and following the normal *YAML* syntax rules around indenting etc.
+
+### `version:`
+
+This is really important. The currently released version (as of December 2018) is **3(.7)**. You only have to include the whole number within the `version` number field within the YAML file. Each *major* upgrade (from 1.x, to 2.x, to 3.x) brings about possible breaking changes, including syntax changes to the YAML structure itself.
+
+Also the version of Compose relates to the version of the released *Docker Engine* so have a good read of the [Compatibility Matrix](https://docs.docker.com/compose/compose-file/compose-versioning/#compatibility-matrix), but usually you pick the latest version.
+
+### `services:`
+
+[Docker services](https://docs.docker.com/get-started/part3/) is where you define each application. So we have two services defined:
+
+- `webapi:` which is our ASP.NET Core *BookStore.WebApi* application.
+- `mongodb:` which is the back-end data store, *MongoDB*.
+
+### `image:`
+
+Each service has an `image` defined. Mongo's [`mongo:latest`](https://hub.docker.com/_/mongo) will be pulled directly from *hub.docker.com*.
+
+Our own will be built locally for now (until we publish it later) and its simply called `garfbradaz/bookstoreapi:develop`. Note the *tag* of **develop**. We now have denoted our debug image, and we can add things like symbols etc for debugging purposes.
+
+### 'container_name:'
+
+This is just a nice friendly name for our container. You can see the name when you run `docker ps` after you have run a container.
+
+## Run your applications
+
+Docker compose has a command  'docker compose up', which allows you to (re)build, (re)create and attach containers for the service. You run the command using the following (make sure you are in the `./docker` directory):
+
+```bash
+docker-compose -f docker-compose.dev.yml up -d --build
+```
+
+This command overrides the file (`-f`) to `docker-compose.dev.yml` and runs `up`. The containers will run in detached mode (`-d`) and run in the background. We will also (re)build the images (`--build`). Because we have a `build:` section in our `docker-compose.dev.yml` file for our code those values will be used. We set the context (`../src/api`) which is the relative directory to the source code we are building (Relative to the `./docker` directory), plus tell `docker-compose` the Dockerfile name.
+
+We also send in some `args` *into* the Dockerfile. Currently we ignore these, but we will be coming back to them later in this post.
+
+Lastly we set some `environment` variables for our application/ASP.NET Core to use. Specifically around setting up a `Development` environment and HTTP URLs.
+
+**Note:** If we dont set these, our application will try and use HTTPS because that is the default now (which is a good thing). Because we haven't set any self-signed developer certificates up yet this will become a bit of a pain. We will do it, but to get up and running, we are switching off HTTPS for now.
+
+We also pull down a **MongoDB** image and start a new database, listening on port 27017. This is the standard port mapping for MongoDB.
+
+This command will also create a default network for your applications to live in. Normally named after the directory `docker-compose` is run with a postfix of **default**. So mine is `docker_default`.
+
+## Check the containers are running
+
+You can now run a `docker ps` on your commandline of choice. You should see  your `webapi_tutorial_debug` and `mongodb` (**Hint:** `container_name` you set in the `docker-compose.dev.yml` file).
+
+![docker ps](/assets/img/posts/docker-ps.png)
+
+## Stop containers
+
+When you have finished you can clear up your containers by running the following, which will stop and remove the containers networks created for this service:
+
+```bash
+docker-compose -f docker-compose.dev.yml down
+```
+
+## Powershell Scripts (Optional)
+
+I have created two powershell scripts that automate this. You just need to run them in the root of the project:
+
+### Run containers
+
+```powershell
+.\run.ps1
+```
+
+### Close and clean containers
+
+```powershell
+.\clean.ps1
+```
+
+Powershell Core is now cross platform as well so you can install Powershell Core and use these scripts on Mac and Linux boxes if you wish.
+
+## Debug Arguments
+
+Previously I mentioned we set a `arg` called `buildconfig:` to `Debug`. We haven't used this so far. But we will now. I use this to build a debug version of our ASP.NET Core *BookStore.WebApi* app, so we can debug into the container using *vsdbg*.
+
+Have a read of my article [Debug .NET Core in Docker]({{ site.baseurl }}{% post_url 2018-12-13-debug-dotnet-core-in-docker %}) about what this is. For this article, change directory to `./src/api` and make sure your `Dockerfile` looks like this:
+
+```docker
 FROM microsoft/dotnet:2.2-sdk AS build-env
+ARG buildconfig
 WORKDIR /app
 COPY BookStore.WebApi.csproj .
 COPY . .
-RUN dotnet publish -c Release -o /publish
+RUN env
+RUN if [ "${buildconfig}" = "Debug" ]; then \
+        dotnet publish -o /publish -c Debug; \
+    else \
+        dotnet publish -o /publish -c Release; \
+    fi 
 
 FROM microsoft/dotnet:2.2-aspnetcore-runtime AS runtime-env
+ARG buildconfig
+ENV DEBIAN_FRONTEND noninteractive
 WORKDIR /publish
-EXPOSE 5000
 COPY --from=build-env /publish .
+RUN if [ "${buildconfig}" = "Debug" ]; then \
+        apt-get update && \
+        apt-get install -y --no-install-recommends apt-utils && \
+        apt-get install curl unzip procps mongodb -y && \
+        curl -sSL https://aka.ms/getvsdbgsh | bash /dev/stdin -v latest -l /publish/vsdbg; \
+     else \ 
+        echo "*Whistling*"; \
+    fi 
+ENV DEBIAN_FRONTEND teletype
 ENTRYPOINT [ "dotnet","BookStore.WebApi.dll" ]
 ```
 
-If this is new to you, then let me explain the format on this file and what it means.
-
-### FROM
-
-This statement sets the *base image* created by Microsoft (or any organisation who has created an base image) and creates a new build stage (each `FROM` creates a new stage). These images will live on a public repository like *hub.docker.com*. So make sure you have logged in via *Docker Desktop* otherwise the first build step will fail.
-
-Having multiple `FROM` denotes a multi-stage Dockerfile.
-
-- [microsoft/dotnet:2.2-sdk](https://hub.docker.com/r/microsoft/dotnet/) - SDK image. This base image is designed to allow you to build/publish using the *dotnet CLI*. As you can see I'm using the 2.2 .NET Core Version (denoted the common tag name of **:2.2-sdk**).
-
-- [microsoft/dotnet:2.2-aspnetcore-runtime](https://hub.docker.com/r/microsoft/dotnet/) - Runtime image. This base image is designed to run a ASP.NET Core application using the *dotnet runtime*. Again it follows the same format with denoting the dotnet version by the common tag of **:2.2-aspnetcore-runtime**.
-
-### WORKDIR
-
-This statement will create a directory for the following statements will work in. If the directory exists, then the directory is just set to the value in `WORKDIR`. In our case `/app` is created by the command and `/publish` is set to (as publish is created in the `dotnet publish`).
-
-### COPY
-
-This statement will copy the files specified *into* the containers file system (normally into the file system specified in `WORKDIR`) from the host machine of the directory where the Dockerfile is placed. So in our instance, the `../src/api` directory.
-
-**Note:** We have two `COPY` commands in the build stage of our Dockerfile context. We do this for the **BookStore.WebApi.csproj** so that we have a build cache entry for this file, so if it hasn't changed, we dont copy it on every build (reduces build times).  Also `COPY . .` will copy everything else.
-
-```Dockerfile
-COPY BookStore.WebApi.csproj .
-COPY . .
-```
-
-Our 2nd stage actually copies the output from `build-env` **/publish** directory into the next stage.
-
-### RUN
-
-This statement will run a set of commands that will create another layer in your image and commit the results, which will form part of the container. It allows you to set up your container before running it.
-
-Our example is the `dotnet publish` will be `RUN` as part of the `docker build` instruction set, creating the binaries to use when we `dotnet` using the published `.dll`.
-
-### ENTRYPOINT
-
-This statement defines what is run when you `docker run` and start the container. Our `ENTRYPOINT` runs the `dotnet` command using our published `.dll`. You can pass more parameters into the `ENTRYPOINT` command via `docker run`.
-
-Our multi-stage Dockerfile builds our source code in the first stage and copies the published output so that it is run using the *.NET Core Runetime*.
-
-## Build the Image
-
-Now we have a Dockerfile, we can build this file into an *image* which will be stored locally on our host. Make sure you are on the commandline of choice, and change directory to `../src/api` and run the following command:
-
-```bash
-docker build -t garfbradaz/ep3-api .
-```
-
-This command will run a `docker build`. The "." signifies you want to use the *Dockerfile* in the current directory and `-t garfbradaz/ep3-api` is a parameter that will build an Image with a **[-]t**ag name of *garfbradaz/ep3-api*. You can replace this string with anything you want.
-
-The first time you run this will take a while, because there will be no *cache entries* from previous builds for your layers. You can also see all the layers that are built from the Microsoft *base images* which are made up of layers also:
-
-![docker-net-layers](/assets/img/posts/docker-net-layers.png)
-
-If you run a `docker images` again you will now see your image has been built (plus the .NET Core Images):
-
-![dotnet-net-images](/assets/img/posts/dotnet-net-images.png)
-
-### Run the Image as a Container
-
-So, we have created a *Dockerfile* that includes the steps to build an image, which includes the resources needed to run the application within a *container*. This is the magic, as we can run this image on any OS that supports Docker itself (If we are building *Linux* containers).
-
-So the following will run your container as isolated/sandboxed process:
-
-```bash
-docker run --env ASPNETCORE_ENVIRONMENT=Development --env ASPNETCORE_URLS=http://+:5000 -p 5000:5000 -t --rm -it  garfbradaz/ep3-api
-```
-
-This command will run your Container interactively (`-it`), and override some environment variables (`--env`); overriding port mapping to 5000 (`-p`) and clean up the container with finished (`--rm`).
-
-I use Powershell to validate the container is running fine, but you can use *postman* (we explore setting this up in another chapter).
-
-```powershell
-Invoke-RestMethod -Uri http://localhost:5000/api/values -Method 'Get'
-```
-
-This should fail with a 401 status, because we set up the `[Authorize]` attribute against the `ValuesController.cs`.  But at least this proves we are hitting the Web API running using Kestrel within the Container process.
-
 ### Next time
 
-We will be exploring `docker compose` to allow us to run and knit together multiple containers together so we can interact with MongoDB for example. 
-
-## Github
-
-All code can be found for episode 3 [here](https://github.com/garfbradaz/webapi-episodes/tree/master/episode-3).
+Now we have our architecture spun up and ready, we can start building some ASP.NET Core code (using C#) to start creating our Models for our *BookStore.WebApi*. 

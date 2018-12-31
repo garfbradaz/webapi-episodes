@@ -214,4 +214,6 @@ This should fail with a 401 status, because we set up the `[Authorize]` attribut
 
 We will be exploring `docker compose` to allow us to run and knit together multiple containers together so we can interact with MongoDB for example. 
 
+## Github
 
+All code can be found for episode 3 [here](https://github.com/garfbradaz/webapi-episodes/tree/master/episode-3).

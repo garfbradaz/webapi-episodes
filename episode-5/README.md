@@ -2,45 +2,48 @@
 layout: post
 author: gareth
 category: blog
-tags: [how-to,dotnet-core,beginners,api,docker-compose,mongodb]
+tags: [how-to,dotnetcore,beginners,api,mongodb,aspnetcore,unittests]
 excerpt_separator: <!--more-->
 series: ASP.NET Core Web API Episodes
 comments: true
-title: Episode 4 - JSON API using ASP.NET Core, Docker & MongoDB -  Docker Part II Docker Compose
+title: Episode 5 - JSON API using ASP.NET Core, Docker & MongoDB -  Modelling, Controller and Unit Tests Part I - BookStore
 ---
-# Previously on Dcoding
+## Previously on Dcoding
 
-In [Episode 3]({{ site.baseurl }}{% post_url 2018-12-29-Episode-3-JSON-API-ASP.NET-Core-Docker--Setting-Up-Docker--DockerFiles %}) I set up our Dockerfiles for creating our *Docker Images* for our BookStore app. This will allow us to rapidly test our application as we move forward in later Episodes. Today's episode is **Docker Part 2: Docking Compose**. <!--more-->
+In [Episode 4]({{ site.baseurl }}{% post_url 2018-12-31-Episode-4-JSON-API-ASP.NET-Core-Docker-Compose %}) I set up our `docker-compose` files to allow us to knit together our application and the services it will be use. Today's episode is focusing on **Modelling, Controller and Unit Tests for the BookStore Object**. <!--more-->
 
-## What is Docker Compose?
+Here is a reminder on the sample *User Stories / Epics* for phase 1.
 
-The [official documentation](https://docs.docker.com/compose/) a good explanation:
+> As a *book store*
+> I can *add* our *store* to the database
+> *So* we can be accessible
+>
+> As a *book store*
+> I can *add* our *inventory* to our database
+> *So* we can expose our inventory
+>
+> As a *book store*
+> We can *update* a books stock level
+> *For* an accurate stock level 
+>
+> As a *API consumer*
+> I can look up a *stores address*
+> *So* we know where to buy a *book*
+>
+> As a *API consumer*
+> I can look up a *book*
+> *So* we can get a *list* of *stores* who sell a
+> *book*
+>
+> As *book store IT Security*
+> We can add *API Keys* to the API
+> *For* API Consumers to use when querying the API
 
-> Compose is a tool for defining and running multi-container Docker applications.
+## Dependency on MongoDB
 
-Docker compose allows you to define your *services* you need to build and run a full scale application. Think about it, not just your application you need. Depending on the type of application you may need:
+Our application will ultimately be using *MongoDB* as its back end data store. We need to take a dependency on the MongoDB driver. This will allow us to communicate with and use MongoDB.
 
-- Database of some sort.
-
-- Load Balancer.
-
-- Web Server.
-
-- Other applications / APIs.
-
-You may even want to run your unit/integration testing during your Continuous Integration pipeline (CI). If each of the applications you need as part of the full application.
-
-## BookStoreApp.WebApi Set up
-
-If we take a look at our application for the *BookStoreApp.WebApi*, we can see the following:
-
-![architecture diagram](/assets/img/posts/docker-arch.png)
-
-As you can see from my quickly drawn up diagram (used [Microsoft Whiteboard](https://www.microsoft.com/en-gb/p/microsoft-whiteboard/9mspc6mp8fm4?activetab=pivot:overviewtab)), we have two *services* running in containers, 1 for the application and the other for the database (*MongoDB*), so we can compose these together using `docker-compose`.
-
-## docker-compose.dev.yml
-
-So in  [Episode 2]({{ site.baseurl }}{% post_url 2018-12-19-Episode-2-JSON-API-Dotnet-Core-Docker---Project-Structure %}) we set up the Project Structure, so change directory to the `./docker` directory.
+Using your shell of choice, change directory to `../src/api` directory. To recap, our directory structure is:
 
 ```
     .
@@ -52,161 +55,347 @@ So in  [Episode 2]({{ site.baseurl }}{% post_url 2018-12-19-Episode-2-JSON-API-D
     ├── tests
     |   ├── integration
     |   ├── unit
-    |       ├── BookStoreApp.Tests.csproj
+    |       ├── BookStore.Tests.csproj
     ├── docker
 ```
 
-Within that directory, you should have two empty YAML files:
+**Note:** Something has changed, can you guess what? Yep that's right, I have renamed the `.csproj` to `BookStoreApp.WebApi.csproj` instead of `BookStore.WebApi.csproj`.
 
-- **docker-compose.dev.yml**
-- **docker-compose.yml**
-
-We are concentrating on a *Development* environment first, so add the following to `docker-compose.dev.yml`:
-
-```yaml
-version: "3"
-services:
-  webapi:
-    image: garfbradaz/bookstoreapi:develop
-    container_name: webapi_tutorial_debug
-    build:
-      args:
-        buildconfig: Debug
-      context: ../src/api
-      dockerfile: Dockerfile
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:5003
-    ports:
-      - "5003:5003"
-    depends_on:
-      - mongodb
-  mongodb:
-    image: mongo:latest
-    container_name: mongodb
-    ports:
-      - "27017:27017"
-```
-
-And also, just add the following line to `docker-compose.yml` file so that when we run `docker-compose up` it doesn't fail:
-
-```yaml
-version: "3"
-```
-
-As in **Episode 3** lets break this *YAML* file down now and what we are declaring. These files are *YAML* and following the normal *YAML* syntax rules around indenting etc.
-
-### `version:`
-
-This is really important. The currently released version (as of December 2018) is **3(.7)**. You only have to include the whole number within the `version` number field within the YAML file. Each *major* upgrade (from 1.x, to 2.x, to 3.x) brings about possible breaking changes, including syntax changes to the YAML structure itself.
-
-Also the version of Compose relates to the version of the released *Docker Engine* so have a good read of the [Compatibility Matrix](https://docs.docker.com/compose/compose-file/compose-versioning/#compatibility-matrix), but usually you pick the latest version.
-
-### `services:`
-
-[Docker services](https://docs.docker.com/get-started/part3/) is where you define each application. So we have two services defined:
-
-- `webapi:` which is our ASP.NET Core *BookStoreApp.WebApi* application.
-- `mongodb:` which is the back-end data store, *MongoDB*.
-
-### `image:`
-
-Each service has an `image` defined. Mongo's [`mongo:latest`](https://hub.docker.com/_/mongo) will be pulled directly from *hub.docker.com*.
-
-Our own will be built locally for now (until we publish it later) and its simply called `garfbradaz/bookstoreapi:develop`. Note the *tag* of **develop**. We now have denoted our debug image, and we can add things like symbols etc for debugging purposes.
-
-### 'container_name:'
-
-This is just a nice friendly name for our container. You can see the name when you run `docker ps` after you have run a container.
-
-## Run your applications
-
-Docker compose has a command  'docker compose up', which allows you to (re)build, (re)create and attach containers for the service. You run the command using the following (make sure you are in the `./docker` directory):
+Now run the following command, which will add the latest Nuget package to your api project.
 
 ```bash
-docker-compose -f docker-compose.dev.yml up -d --build
+dotnet add package  MongoDB.Driver
 ```
 
-This command overrides the file (`-f`) to `docker-compose.dev.yml` and runs `up`. The containers will run in detached mode (`-d`) and run in the background. We will also (re)build the images (`--build`). Because we have a `build:` section in our `docker-compose.dev.yml` file for our code those values will be used. We set the context (`../src/api`) which is the relative directory to the source code we are building (Relative to the `./docker` directory), plus tell `docker-compose` the Dockerfile name.
+We will be returning to MongoDB once we have the unit test infrastructure set up in the next episode.
 
-We also send in some `args` *into* the Dockerfile. Currently we ignore these, but we will be coming back to them later in this post.
+## BookStore
+### Modelling
 
-Lastly we set some `environment` variables for our application/ASP.NET Core to use. Specifically around setting up a `Development` environment and HTTP URLs.
+The first of our models (the *M* in **M**VC), will represent our **BookStore**. A simple [Plain old C# (POCO)](https://en.wikipedia.org/wiki/Plain_old_CLR_object) to represent this:
 
-**Note:** If we dont set these, our application will try and use HTTPS because that is the default now (which is a good thing). Because we haven't set any self-signed developer certificates up yet this will become a bit of a pain. We will do it, but to get up and running, we are switching off HTTPS for now.
+```c#
+    /// <summary>
+    /// BookStore POCO.
+    /// </summary>
+    public class BookStore
+    {
+        [BsonId]
+        public ObjectId  Id {get; set;}
+        public string Name {get;set;}
+        public string AddressLine1 {get;set;}
+        public string AddressLine2 {get;set;}
+        public string AddressLine3 {get;set;}
+        public string City {get;set;}
+        public string PostCode {get;set;}
+        public string TelephoneNumber {get;set;}
 
-We also pull down a **MongoDB** image and start a new database, listening on port 27017. This is the standard port mapping for MongoDB.
+        /// <summary>
+        /// Default constructor
+        /// </summary>
+        public BookStore()
+        {
+            this.Id = ObjectId.GenerateNewId();
+        }
+    }
+```
 
-This command will also create a default network for your applications to live in. Normally named after the directory `docker-compose` is run with a postfix of **default**. So mine is `docker_default`.
+I added a `Model` folder to my `../api` folder where this was added. MongoDB uses a serialization format standard called [BSON](https://docs.mongodb.com/manual/reference/glossary/#term-bson). BSON has the idea of *types* and one of those types is [`ObjectId`](https://docs.mongodb.com/manual/reference/bson-types/#objectid) which represents a unique id for the record. You decorate the `Id` property with `[BsonId]` attribute, to inform the MongoDB driver what field is your `BsonId` field.
 
-## Check the containers are running
+I have also created a default constructor that sets that Id up. Now we have created the `Models` directory and structure is now the following:
 
-You can now run a `docker ps` on your commandline of choice. You should see  your `webapi_tutorial_debug` and `mongodb` (**Hint:** `container_name` you set in the `docker-compose.dev.yml` file).
+```
+    .
+    ├── src
+    |   ├── api
+    |       ├── Models
+    |           ├── BookStore.cs
+    |       ├── BookStoreApp.WebApi.csproj
+    |       ├── Dockerfile
+    ├── tests
+    |   ├── integration
+    |   ├── unit
+    |       ├── BookStore.Tests.csproj
+```
 
-![docker ps](/assets/img/posts/docker-ps.png)
+### Controller
 
-## Stop containers
+Now we need to create a **BookStore** controller. A controller is the *C* in MV**C** pattern. The controller will handle the HTTP requests that come in using *Actions*. The HTTP requests are mapped to Actions via the routing pipeline of MVC. For WebAPIs, they map to specific HTTP methods like `GET`, `POST`, `PUT` etc. 
 
-When you have finished you can clear up your containers by running the following, which will stop and remove the containers networks created for this service:
+ASP.NET expects you to follow conventions when creating your own Controllers:
+
+- The Controller class name always ends with `Controller`.
+- The Controller class should reside in a folder called `Controllers`.
+- The Controller class should inherit from `Microsoft.AspNetCore.Mvc.ControllerBase` (WebAPI) / `Microsoft.AspNetCore.Mvc.Controller` (ASP.NET MVC Apps with Views).
+
+When you do a `dotnet new webapi` the templates include a standard `ValuesController.cs` that lives in a `Controllers` folder. Create a new `BookStoreController.cs` file in there:
+
+```
+    .
+    ├── src
+    |   ├── api
+    |       ├── Controllers
+    |           ├── BookStoreController.cs
+    |       ├── Models
+    |           ├── BookStore.cs
+    |       ├── BookStoreApp.WebApi.csproj
+    |       ├── Dockerfile
+    ├── tests
+    |   ├── integration
+    |   ├── unit
+    |       ├── BookStore.Tests.csproj
+```
+
+To this file I have added the following:
+
+```c#
+    [Route("api/[controller]")]
+    [ApiController]
+    public class BookStoreController : ControllerBase
+    {
+        // GET api/values
+        [HttpGet]
+        public async Task<ActionResult> Get()
+        {
+            var bookStore = new List<BookStore>{
+                new BookStore {
+                    Name = "Waterstones",
+                    AddressLine1 = "The Dolphin & Anchor",
+                    AddressLine2 = "West Street",
+                    City = "Chichester",
+                    PostCode = "PO19 1QD",
+                    TelephoneNumber = "01234 773030"
+                }
+            };
+            return await Task.Run(() => new JsonResult(bookStore));
+        }
+    }
+```
+
+Its a simple `GET` method that just returns a hard coded `BookStore` object. For today's episode we are just concentrating on getting our unit test infrastructure up and running so we can ignore `PUT`, `POST` and `DELETE` until my next episode.
+
+### Unit Tests
+
+Before we move forward we need to use the `dotnet` tooling to add a project reference to our tests project. Change directory to `tests\unit` and do the following to add a reference:
 
 ```bash
-docker-compose -f docker-compose.dev.yml down
+dotnet add reference ..\..\src\api\BookStoreApp.WebApi.csproj
 ```
 
-## Powershell Scripts (Optional)
+I have also added two basic test methods to cover our new `GET` method in oir controller:
 
-I have created two powershell scripts that automate this. You just need to run them in the root of the project:
+```c#
+    public class ControllerTests
+    {
+        [Fact]
+        public async Task BookStoreController_Get_Should_Return_ActionResult()
+        {
+            //Arrange
+            var controller = new BookStoreController();
 
-### Run containers
+            //Act
+            var result = await controller.Get();
 
-```powershell
-.\run.ps1
+            //Assert
+            Assert.IsType<JsonResult>(result);
+        }
+
+        [Fact]
+        public async Task BookStoreController_Get_Should_Return_Correct_BookStore_Data()
+        {
+            //Arrange
+            var controller = new BookStoreController();
+
+            //Act
+            var result = await controller.Get();
+            var json = result.ToJson<BookStore>();
+
+            //Assert
+            Assert.True(json[0].Name == "Waterstones",$"Assert failed, received {json[0].Name} ");
+            Assert.True(json[0].PostCode == "PO19 1QD",$"Assert failed, received {json[0].PostCode} ");
+            Assert.True(json[0].TelephoneNumber == "01234773030",$"Assert failed, received {json[0].TelephoneNumber} ");
+        }
+    }
 ```
 
-### Close and clean containers
+Before we start integrating with Docker, we can test using (you guessed it), the `dotnet` tooling. Make sure you are in the `tests\unit` directory and run:
 
-```powershell
-.\clean.ps1
+```bash
+dotnet restore
+dotnet test
 ```
 
-Powershell Core is now cross platform as well so you can install Powershell Core and use these scripts on Mac and Linux boxes if you wish.
+The `test` will set off a `dotnet build` first then run our XUnit tests. One test should fail and this will be outputted similar to this:
 
-## Debug Arguments
+> Total tests: 2. Passed: 1. Failed: 1. Skipped: 0.
+>
+> Test Run Failed.
+>
+> Test execution time: 2.6340 Seconds
 
-Previously I mentioned we set a `arg` called `buildconfig:` to `Debug`. We haven't used this so far. But we will now. I use this to build a debug version of our ASP.NET Core *BookStoreApp.WebApi* app, so we can debug into the container using *vsdbg*.
+The error was intentional, there should of been a space in between `"01234773030"`, I fixed this:
 
-Have a read of my article [Debug .NET Core in Docker]({{ site.baseurl }}{% post_url 2018-12-13-debug-dotnet-core-in-docker %}) about what this is. For this article, change directory to `./src/api` and make sure your `Dockerfile` looks like this:
+```c#
+            Assert.True(json[0].TelephoneNumber == "01234 773030",$"Assert failed, received {json[0].TelephoneNumber} ");
+```
 
-```docker
+Re-run the tests and everything should now be green:
+
+> Total tests: 2. Passed: 2. Failed: 0. Skipped: 0.
+>
+> Test Run Successful.
+>
+> Test execution time: 3.1173 Seconds
+
+Now we have a project with some basic logic within a controller, and a very basic model. We have also started creating some tests to cover this code. Now we need to *build and run* the application. We could at this stage use the normal route for that, but as these episodes include **Docker**, lets integrate what we know into a docker pipeline.
+
+## Docker
+
+Firstly in the root of the project create a new Docker file. Your project structure should look like this now:
+
+```
+    .
+    ├── src
+    ├── tests
+    ├── Dockerfile
+```
+
+Here we will create a multi-stage `Dockerfile` that will restore, build and run our tests. Here is the first stage:
+
+```Dockerfile
 FROM microsoft/dotnet:2.2-sdk AS build-env
-ARG buildconfig
 WORKDIR /app
-COPY BookStoreApp.WebApi.csproj .
-COPY . .
-RUN env
-RUN if [ "${buildconfig}" = "Debug" ]; then \
-        dotnet publish -o /publish -c Debug; \
-    else \
-        dotnet publish -o /publish -c Release; \
-    fi 
 
+COPY src/api/BookStoreApp.WebApi.csproj ./src/api/
+RUN dotnet restore ./src/api/BookStoreApp.WebApi.csproj
+COPY tests/unit/BookStore.Tests.csproj ./tests/unit/
+RUN dotnet restore ./tests/unit/BookStore.Tests.csproj
+
+COPY . .
+```
+
+You should be familiar with this now from previous episodes. This time take note that we are copying the unit test project files in to the build context. Also note we need to keep the same directory structure as before, because we added a `dotnet add reference` previously into the test project. If the directories didn't match we would get build errors.
+
+Run the following:
+
+```bash
+ docker build -t test-ep5 .
+```
+
+Now do a `docker image` and you will see a massive image there:
+
+![test-5 image](/assets/img/posts/test-ep5-size.png)
+
+Docker has a way of managing this, meet `.dockerignore`.
+
+### .dockerignore
+
+This file behaves similarly to a `.gitignore`. It tells docker which files to not copying in during a  build. So how do you know which files to ignore, well I learnt a good trick from [Wes Higbee](https://twitter.com/g0t4) by passing in a `ls alR` to list out your directories. Run the following:
+
+```bash
+docker run --rm test-ep5 ls -alR
+```
+
+This will list out your containers file system, and you can easily see what is copied in. So things like `.vscode`, `.git` folders and `bin` directories. None of this stuff is needed during the build stage of this multi stage `Dockerfile`, so lets exclude it, using similar glob patterns you can use in `.gitignore` files. Add a `.dockerignore` file to your root:
+
+```
+    .
+    ├── src
+    ├── tests
+    ├── Dockerfile
+    ├── .dockerignore
+```
+
+Then add the following, excluding files and artefacts that are not needed for a restore and build. We exclude things like our `docker` folder and `.ps1` scripts we have been using. Plus the `README.md` and dockerfiles.
+
+```
+**/.vscode/
+**/.git/
+docker/
+**/bin/
+**/obj/
+**/.dockerignore/
+**/Dockerfile*
+**/docker-compose*.yml/
+run.ps1
+clean.ps1
+README.md
+```
+
+Re-run:
+
+```bash
+ docker build -t test-ep5 .
+ docker run --rm test-ep5 ls -alR
+```
+
+You will see a cleaner build plus about 100MB less space than previously:
+
+![test-5 image](/assets/img/posts/test-ep5-size-2.png)
+
+## Unit Tests in Docker
+
+So now we have pruned our Image, we can add our tests to our `Dockerfile`. Add the following into your `Dockerfile`:
+
+```dockerfile
+RUN dotnet test tests/unit/BookStore.Tests.csproj
+RUN dotnet publish src/api/BookStoreApp.WebApi.csproj -o /publish
+```
+
+We run what we ran on the commandline early (see no magic). This will run out unit tests, then if they pass, we will publish a new release ready for our 2nd stage to use, by running  `dotnet publish` and outputting to a new `/publish` directory.
+
+Run again using the following and see your test success!
+
+```bash
+ docker build -t test-ep5 .
+```
+
+### Running your application
+
+In previous episodes we had a multi stage `Dockerfile` with a 2nd stage that runs the application itself. No different here, our 2nd stage allows us to run our application.
+
+**NB:** Once we have added this, we cannot use our **"ls aLR"** trick Wes taught us, as our `ENTRYPOINT` will be set with `dotnet`. Also the 1st build stage is thrown away once used so we cannot access the directory fully anyway.
+
+Add the following to your `Dockerfile` which is our runtime stage:
+
+```dockerfile
 FROM microsoft/dotnet:2.2-aspnetcore-runtime AS runtime-env
-ARG buildconfig
-ENV DEBIAN_FRONTEND noninteractive
 WORKDIR /publish
 COPY --from=build-env /publish .
-RUN if [ "${buildconfig}" = "Debug" ]; then \
-        apt-get update && \
-        apt-get install -y --no-install-recommends apt-utils && \
-        apt-get install curl unzip procps mongodb -y && \
-        curl -sSL https://aka.ms/getvsdbgsh | bash /dev/stdin -v latest -l /publish/vsdbg; \
-     else \ 
-        echo "*Whistling*"; \
-    fi 
-ENV DEBIAN_FRONTEND teletype
 ENTRYPOINT [ "dotnet","BookStoreApp.WebApi.dll" ]
 ```
 
-### Next time
+Rebuild the Image first:
 
-Now we have our architecture spun up and ready, we can start building some ASP.NET Core code (using C#) to start creating our Models for our *BookStoreApp.WebApi*. 
+```bash
+ docker build -t test-ep5 .
+```
+
+Then we can run the Image as a container process, overriding some of the ASP.NET Core environment variables using `-e`. We would override these usually when using `docker-compose`.
+
+```bash
+docker run -e "ASPNETCORE_ENVIRONMENT=Development" -e "ASPNETCORE_URLS=http://+:5003" -p 5003:5003 --rm -it test-ep5
+```
+
+You can then use your application of choice (I'm using Postman, more to come on that) to hit [http://localhost:5003/api/bookstore](http://localhost:5003/api/bookstore). You should receive the following JSON payload:
+
+```json
+[
+    {
+        "id": "5c6947093497a200016c0dee",
+        "name": "Waterstones",
+        "addressLine1": "The Dolphin & Anchor",
+        "addressLine2": "West Street",
+        "addressLine3": null,
+        "city": "Chichester",
+        "postCode": "PO19 1QD",
+        "telephoneNumber": "01234 773030"
+    }
+]
+```
+
+## Next time
+
+That's it for today. Remember all code is on [Github](https://github.com/garfbradaz/webapi-episodes/tree/master/episode-5) if you want it. 
+
+On our next episode we will start integrating MongoDB into the application.

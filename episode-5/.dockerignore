@@ -1,0 +1,11 @@
+**/.vscode/
+**/.git/
+docker/
+**/bin/
+**/obj/
+**/.dockerignore/
+**/Dockerfile*
+**/docker-compose*.yml/
+run.ps1
+clean.ps1
+README.md
